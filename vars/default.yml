@@ -1,0 +1,25 @@
+---
+hostname: vCenter ip or hostname
+username: administrator@vsphere.local
+password: secret
+datacenter: datacenter name
+folder: "{{ datacenter }}/vm"
+#state: poweredon
+state: absent
+vms:
+  - name: example
+    template: CentOS7_TMP
+    vm_username: root
+    vm_password: guest user password
+    hardware:
+      num_coups: 1
+      num_cpu_cores_per_socket: 1
+      memory_mb: 2048
+    vm_networks:
+      - name: VM Network
+    guest_networks:
+      - name: ens192
+        ipv4: 192.168.0.166/24
+        ipv4_gateway: 192.168.0.1
+        ipv4_dns: 192.168.0.1
+

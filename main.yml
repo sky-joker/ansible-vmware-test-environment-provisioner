@@ -1,0 +1,129 @@
+---
+- name: VMware test environment provisioner
+  hosts: localhost
+  gather_facts: no
+  vars_files:
+    - vars/default.yml
+  tasks:
+    - block:
+      - name: Clone for vm from template.
+        vmware_guest:
+          hostname: "{{ hostname }}"
+          username: "{{ username }}"
+          password: "{{ password }}"
+          validate_certs: no
+          datacenter: "{{ datacenter }}"
+          folder: "{{ folder }}"
+          template: "{{ item.template }}"
+          name: "{{ item.name }}"
+          hardware: "{{ item.hardware }}"
+          networks: "{{ item.vm_networks }}"
+          state: "{{ state }}"
+        loop: "{{ vms }}"
+
+      - name: Check VMware tools status.
+        vmware_guest_tools_wait:
+          hostname: "{{ hostname }}"
+          username: "{{ username }}"
+          password: "{{ password }}"
+          validate_certs: no
+          folder: "{{ folder }}"
+          name: "{{ item.name }}"
+        loop: "{{ vms }}"
+        when: state == "poweredon"
+
+      - name: Set for connect id.
+        vmware_vm_shell:
+          hostname: "{{ hostname }}"
+          username: "{{ username }}"
+          password: "{{ password }}"
+          validate_certs: no
+          datacenter: "{{ datacenter }}"
+          folder: "{{ folder }}"
+          vm_id: "{{ item.0.name }}"
+          vm_username: "{{ item.0.vm_username }}"
+          vm_password: "{{ item.0.vm_password }}"
+          vm_shell: /usr/bin/bash
+          vm_shell_args: -c "UUID=`nmcli c s | grep {{ item.1.name }} | sed -e \"s/.* \(.*\)  ethernet  {{ item.1.name}}/\1/\"` ; nmcli c m \$UUID connect.id {{ item.1.name }}"
+        with_subelements:
+          - "{{ vms }}"
+          - guest_networks
+        when: state == "poweredon"
+
+      - name: Set for ipv4 address.
+        vmware_vm_shell:
+          hostname: "{{ hostname }}"
+          username: "{{ username }}"
+          password: "{{ password }}"
+          validate_certs: no
+          datacenter: "{{ datacenter }}"
+          folder: "{{ folder }}"
+          vm_id: "{{ item.0.name }}"
+          vm_username: "{{ item.0.vm_username }}"
+          vm_password: "{{ item.0.vm_password }}"
+          vm_shell: /usr/bin/bash
+          vm_shell_args: -c "UUID=`nmcli c s | grep {{ item.1.name }} | sed -e \"s/.* \(.*\)  ethernet  {{ item.1.name}}/\1/\"` ; nmcli c m \$UUID connect.autoconnect yes ipv4.method manual ipv4.address {{ item.1.ipv4 }} ipv4.gateway \"{{ item.1.ipv4_gateway }}\" ipv4.dns \"{{ item.1.ipv4_dns }}\""
+        with_subelements:
+          - "{{ vms }}"
+          - guest_networks
+        when: state == "poweredon"
+
+      - name: Set for hostname.
+        vmware_vm_shell:
+          hostname: "{{ hostname }}"
+          username: "{{ username }}"
+          password: "{{ password }}"
+          validate_certs: no
+          datacenter: "{{ datacenter }}"
+          folder: "{{ folder }}"
+          vm_id: "{{ item.name }}"
+          vm_username: "{{ item.vm_username }}"
+          vm_password: "{{ item.vm_password }}"
+          vm_shell: /usr/bin/hostnamectl
+          vm_shell_args: "set-hostname --static {{ item.name }}"
+        loop: "{{ vms }}"
+        when: state == "poweredon"
+
+      - name: Reboot for vm.
+        vmware_vm_shell:
+          hostname: "{{ hostname }}"
+          username: "{{ username }}"
+          password: "{{ password }}"
+          validate_certs: no
+          datacenter: "{{ datacenter }}"
+          folder: "{{ folder }}"
+          vm_id: "{{ item.name }}"
+          vm_username: "{{ item.vm_username }}"
+          vm_password: "{{ item.vm_password }}"
+          vm_shell: /usr/sbin/reboot
+        loop: "{{ vms }}"
+        when: state == "poweredon"
+      when: state != "absent" and state != "poweredoff" and state != "suspended" and state != "shutdownguest"
+
+    - block:
+      - name: Poweredoff for vm.
+        vmware_guest:
+          hostname: "{{ hostname }}"
+          username: "{{ username }}"
+          password: "{{ password }}"
+          validate_certs: no
+          datacenter: "{{ datacenter }}"
+          folder: "{{ folder }}"
+          name: "{{ item.name }}"
+          hardware: "{{ item.hardware }}"
+          state: poweredoff
+        loop: "{{ vms }}"
+
+      - name: Delete for vm.
+        vmware_guest:
+          hostname: "{{ hostname }}"
+          username: "{{ username }}"
+          password: "{{ password }}"
+          validate_certs: no
+          datacenter: "{{ datacenter }}"
+          folder: "{{ folder }}"
+          name: "{{ item.name }}"
+          hardware: "{{ item.hardware }}"
+          state: absent
+        loop: "{{ vms }}"
+      when: state == "absent"
